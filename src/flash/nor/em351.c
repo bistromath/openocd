@@ -33,24 +33,24 @@
 #include <target/algorithm.h>
 #include <target/armv7m.h>
 
-/* em357 register locations */
+/* em351 register locations */
 
-#define EM357_FLASH_ACR         0x40008000
-#define EM357_FLASH_KEYR        0x40008004
-#define EM357_FLASH_OPTKEYR     0x40008008
-#define EM357_FLASH_SR          0x4000800C
-#define EM357_FLASH_CR          0x40008010
-#define EM357_FLASH_AR          0x40008014
-#define EM357_FLASH_OBR         0x4000801C
-#define EM357_FLASH_WRPR        0x40008020
+#define EM351_FLASH_ACR         0x40008000
+#define EM351_FLASH_KEYR        0x40008004
+#define EM351_FLASH_OPTKEYR     0x40008008
+#define EM351_FLASH_SR          0x4000800C
+#define EM351_FLASH_CR          0x40008010
+#define EM351_FLASH_AR          0x40008014
+#define EM351_FLASH_OBR         0x4000801C
+#define EM351_FLASH_WRPR        0x40008020
 
-#define EM357_FPEC_CLK          0x4000402c
+#define EM351_FPEC_CLK          0x4000402c
 /* option byte location */
 
-#define EM357_OB_RDP            0x08040800
-#define EM357_OB_WRP0           0x08040808
-#define EM357_OB_WRP1           0x0804080A
-#define EM357_OB_WRP2           0x0804080C
+#define EM351_OB_RDP            0x08040800
+#define EM351_OB_WRP0           0x08040808
+#define EM351_OB_WRP1           0x0804080A
+#define EM351_OB_WRP2           0x0804080C
 
 /* FLASH_CR register bits */
 
@@ -70,7 +70,7 @@
 #define FLASH_WRPRTERR  (1 << 4)
 #define FLASH_EOP               (1 << 5)
 
-/* EM357_FLASH_OBR bit definitions (reading) */
+/* EM351_FLASH_OBR bit definitions (reading) */
 
 #define OPT_ERROR               0
 #define OPT_READOUT             1
@@ -80,44 +80,44 @@
 #define KEY1                    0x45670123
 #define KEY2                    0xCDEF89AB
 
-struct em357_options {
+struct em351_options {
 	uint16_t RDP;
 	uint16_t user_options;
 	uint16_t protection[3];
 };
 
-struct em357_flash_bank {
-	struct em357_options option_bytes;
+struct em351_flash_bank {
+	struct em351_options option_bytes;
 	int ppage_size;
 	int probed;
 };
 
-static int em357_mass_erase(struct flash_bank *bank);
+static int em351_mass_erase(struct flash_bank *bank);
 
-/* flash bank em357 <base> <size> 0 0 <target#>
+/* flash bank em351 <base> <size> 0 0 <target#>
  */
-FLASH_BANK_COMMAND_HANDLER(em357_flash_bank_command)
+FLASH_BANK_COMMAND_HANDLER(em351_flash_bank_command)
 {
-	struct em357_flash_bank *em357_info;
+	struct em351_flash_bank *em351_info;
 
 	if (CMD_ARGC < 6)
 		return ERROR_COMMAND_SYNTAX_ERROR;
 
-	em357_info = malloc(sizeof(struct em357_flash_bank));
-	bank->driver_priv = em357_info;
+	em351_info = malloc(sizeof(struct em351_flash_bank));
+	bank->driver_priv = em351_info;
 
-	em357_info->probed = 0;
+	em351_info->probed = 0;
 
 	return ERROR_OK;
 }
 
-static inline int em357_get_flash_status(struct flash_bank *bank, uint32_t *status)
+static inline int em351_get_flash_status(struct flash_bank *bank, uint32_t *status)
 {
 	struct target *target = bank->target;
-	return target_read_u32(target, EM357_FLASH_SR, status);
+	return target_read_u32(target, EM351_FLASH_SR, status);
 }
 
-static int em357_wait_status_busy(struct flash_bank *bank, int timeout)
+static int em351_wait_status_busy(struct flash_bank *bank, int timeout)
 {
 	struct target *target = bank->target;
 	uint32_t status;
@@ -125,7 +125,7 @@ static int em357_wait_status_busy(struct flash_bank *bank, int timeout)
 
 	/* wait for busy to clear */
 	for (;; ) {
-		retval = em357_get_flash_status(bank, &status);
+		retval = em351_get_flash_status(bank, &status);
 		if (retval != ERROR_OK)
 			return retval;
 		LOG_DEBUG("status: 0x%" PRIx32 "", status);
@@ -139,12 +139,12 @@ static int em357_wait_status_busy(struct flash_bank *bank, int timeout)
 	}
 
 	if (status & FLASH_WRPRTERR) {
-		LOG_ERROR("em357 device protected");
+		LOG_ERROR("em351 device protected");
 		retval = ERROR_FAIL;
 	}
 
 	if (status & FLASH_PGERR) {
-		LOG_ERROR("em357 device programming failed");
+		LOG_ERROR("em351 device programming failed");
 		retval = ERROR_FAIL;
 	}
 
@@ -153,167 +153,167 @@ static int em357_wait_status_busy(struct flash_bank *bank, int timeout)
 		/* If this operation fails, we ignore it and report the original
 		 * retval
 		 */
-		target_write_u32(target, EM357_FLASH_SR, FLASH_WRPRTERR | FLASH_PGERR);
+		target_write_u32(target, EM351_FLASH_SR, FLASH_WRPRTERR | FLASH_PGERR);
 	}
 	return retval;
 }
 
-static int em357_read_options(struct flash_bank *bank)
+static int em351_read_options(struct flash_bank *bank)
 {
 	uint32_t optiondata;
-	struct em357_flash_bank *em357_info = NULL;
+	struct em351_flash_bank *em351_info = NULL;
 	struct target *target = bank->target;
 
-	em357_info = bank->driver_priv;
+	em351_info = bank->driver_priv;
 
 	/* read current option bytes */
-	int retval = target_read_u32(target, EM357_FLASH_OBR, &optiondata);
+	int retval = target_read_u32(target, EM351_FLASH_OBR, &optiondata);
 	if (retval != ERROR_OK)
 		return retval;
 
-	em357_info->option_bytes.user_options = (uint16_t)0xFFFC | ((optiondata >> 2) & 0x03);
-	em357_info->option_bytes.RDP = (optiondata & (1 << OPT_READOUT)) ? 0xFFFF : 0x5AA5;
+	em351_info->option_bytes.user_options = (uint16_t)0xFFFC | ((optiondata >> 2) & 0x03);
+	em351_info->option_bytes.RDP = (optiondata & (1 << OPT_READOUT)) ? 0xFFFF : 0x5AA5;
 
 	if (optiondata & (1 << OPT_READOUT))
 		LOG_INFO("Device Security Bit Set");
 
 	/* each bit refers to a 4bank protection */
-	retval = target_read_u32(target, EM357_FLASH_WRPR, &optiondata);
+	retval = target_read_u32(target, EM351_FLASH_WRPR, &optiondata);
 	if (retval != ERROR_OK)
 		return retval;
 
-	em357_info->option_bytes.protection[0] = (uint16_t)optiondata;
-	em357_info->option_bytes.protection[1] = (uint16_t)(optiondata >> 8);
-	em357_info->option_bytes.protection[2] = (uint16_t)(optiondata >> 16);
+	em351_info->option_bytes.protection[0] = (uint16_t)optiondata;
+	em351_info->option_bytes.protection[1] = (uint16_t)(optiondata >> 8);
+	em351_info->option_bytes.protection[2] = (uint16_t)(optiondata >> 16);
 
 	return ERROR_OK;
 }
 
-static int em357_erase_options(struct flash_bank *bank)
+static int em351_erase_options(struct flash_bank *bank)
 {
-	struct em357_flash_bank *em357_info = NULL;
+	struct em351_flash_bank *em351_info = NULL;
 	struct target *target = bank->target;
 
-	em357_info = bank->driver_priv;
+	em351_info = bank->driver_priv;
 
 	/* read current options */
-	em357_read_options(bank);
+	em351_read_options(bank);
 
 	/* unlock flash registers */
-	int retval = target_write_u32(target, EM357_FLASH_KEYR, KEY1);
+	int retval = target_write_u32(target, EM351_FLASH_KEYR, KEY1);
 	if (retval != ERROR_OK)
 		return retval;
 
-	retval = target_write_u32(target, EM357_FLASH_KEYR, KEY2);
+	retval = target_write_u32(target, EM351_FLASH_KEYR, KEY2);
 	if (retval != ERROR_OK)
 		return retval;
 
 	/* unlock option flash registers */
-	retval = target_write_u32(target, EM357_FLASH_OPTKEYR, KEY1);
+	retval = target_write_u32(target, EM351_FLASH_OPTKEYR, KEY1);
 	if (retval != ERROR_OK)
 		return retval;
-	retval = target_write_u32(target, EM357_FLASH_OPTKEYR, KEY2);
+	retval = target_write_u32(target, EM351_FLASH_OPTKEYR, KEY2);
 	if (retval != ERROR_OK)
 		return retval;
 
 	/* erase option bytes */
-	retval = target_write_u32(target, EM357_FLASH_CR, FLASH_OPTER | FLASH_OPTWRE);
+	retval = target_write_u32(target, EM351_FLASH_CR, FLASH_OPTER | FLASH_OPTWRE);
 	if (retval != ERROR_OK)
 		return retval;
-	retval = target_write_u32(target, EM357_FLASH_CR, FLASH_OPTER | FLASH_STRT | FLASH_OPTWRE);
+	retval = target_write_u32(target, EM351_FLASH_CR, FLASH_OPTER | FLASH_STRT | FLASH_OPTWRE);
 	if (retval != ERROR_OK)
 		return retval;
 
-	retval = em357_wait_status_busy(bank, 10);
+	retval = em351_wait_status_busy(bank, 10);
 	if (retval != ERROR_OK)
 		return retval;
 
 	/* clear readout protection and complementary option bytes
 	 * this will also force a device unlock if set */
-	em357_info->option_bytes.RDP = 0x5AA5;
+	em351_info->option_bytes.RDP = 0x5AA5;
 
 	return ERROR_OK;
 }
 
-static int em357_write_options(struct flash_bank *bank)
+static int em351_write_options(struct flash_bank *bank)
 {
-	struct em357_flash_bank *em357_info = NULL;
+	struct em351_flash_bank *em351_info = NULL;
 	struct target *target = bank->target;
 
-	em357_info = bank->driver_priv;
+	em351_info = bank->driver_priv;
 
 	/* unlock flash registers */
-	int retval = target_write_u32(target, EM357_FLASH_KEYR, KEY1);
+	int retval = target_write_u32(target, EM351_FLASH_KEYR, KEY1);
 	if (retval != ERROR_OK)
 		return retval;
-	retval = target_write_u32(target, EM357_FLASH_KEYR, KEY2);
+	retval = target_write_u32(target, EM351_FLASH_KEYR, KEY2);
 	if (retval != ERROR_OK)
 		return retval;
 
 	/* unlock option flash registers */
-	retval = target_write_u32(target, EM357_FLASH_OPTKEYR, KEY1);
+	retval = target_write_u32(target, EM351_FLASH_OPTKEYR, KEY1);
 	if (retval != ERROR_OK)
 		return retval;
-	retval = target_write_u32(target, EM357_FLASH_OPTKEYR, KEY2);
+	retval = target_write_u32(target, EM351_FLASH_OPTKEYR, KEY2);
 	if (retval != ERROR_OK)
 		return retval;
 
 	/* program option bytes */
-	retval = target_write_u32(target, EM357_FLASH_CR, FLASH_OPTPG | FLASH_OPTWRE);
+	retval = target_write_u32(target, EM351_FLASH_CR, FLASH_OPTPG | FLASH_OPTWRE);
 	if (retval != ERROR_OK)
 		return retval;
 
-	retval = em357_wait_status_busy(bank, 10);
+	retval = em351_wait_status_busy(bank, 10);
 	if (retval != ERROR_OK)
 		return retval;
 
 	/* write protection byte 1 */
-	retval = target_write_u16(target, EM357_OB_WRP0, em357_info->option_bytes.protection[0]);
+	retval = target_write_u16(target, EM351_OB_WRP0, em351_info->option_bytes.protection[0]);
 	if (retval != ERROR_OK)
 		return retval;
 
-	retval = em357_wait_status_busy(bank, 10);
+	retval = em351_wait_status_busy(bank, 10);
 	if (retval != ERROR_OK)
 		return retval;
 
 	/* write protection byte 2 */
-	retval = target_write_u16(target, EM357_OB_WRP1, em357_info->option_bytes.protection[1]);
+	retval = target_write_u16(target, EM351_OB_WRP1, em351_info->option_bytes.protection[1]);
 	if (retval != ERROR_OK)
 		return retval;
 
-	retval = em357_wait_status_busy(bank, 10);
+	retval = em351_wait_status_busy(bank, 10);
 	if (retval != ERROR_OK)
 		return retval;
 
 	/* write protection byte 3 */
-	retval = target_write_u16(target, EM357_OB_WRP2, em357_info->option_bytes.protection[2]);
+	retval = target_write_u16(target, EM351_OB_WRP2, em351_info->option_bytes.protection[2]);
 	if (retval != ERROR_OK)
 		return retval;
 
-	retval = em357_wait_status_busy(bank, 10);
+	retval = em351_wait_status_busy(bank, 10);
 	if (retval != ERROR_OK)
 		return retval;
 
 	/* write readout protection bit */
-	retval = target_write_u16(target, EM357_OB_RDP, em357_info->option_bytes.RDP);
+	retval = target_write_u16(target, EM351_OB_RDP, em351_info->option_bytes.RDP);
 	if (retval != ERROR_OK)
 		return retval;
 
-	retval = em357_wait_status_busy(bank, 10);
+	retval = em351_wait_status_busy(bank, 10);
 	if (retval != ERROR_OK)
 		return retval;
 
-	retval = target_write_u32(target, EM357_FLASH_CR, FLASH_LOCK);
+	retval = target_write_u32(target, EM351_FLASH_CR, FLASH_LOCK);
 	if (retval != ERROR_OK)
 		return retval;
 
 	return ERROR_OK;
 }
 
-static int em357_protect_check(struct flash_bank *bank)
+static int em351_protect_check(struct flash_bank *bank)
 {
 	struct target *target = bank->target;
-	struct em357_flash_bank *em357_info = bank->driver_priv;
+	struct em351_flash_bank *em351_info = bank->driver_priv;
 
 	uint32_t protection;
 	int i, s;
@@ -326,26 +326,26 @@ static int em357_protect_check(struct flash_bank *bank)
 	}
 
 	/* each bit refers to a 4bank protection (bit 0-23) */
-	int retval = target_read_u32(target, EM357_FLASH_WRPR, &protection);
+	int retval = target_read_u32(target, EM351_FLASH_WRPR, &protection);
 	if (retval != ERROR_OK)
 		return retval;
 
 	/* each protection bit is for 4 * 2K pages */
-	num_bits = (bank->num_sectors / em357_info->ppage_size);
+	num_bits = (bank->num_sectors / em351_info->ppage_size);
 
 	for (i = 0; i < num_bits; i++) {
 		set = 1;
 		if (protection & (1 << i))
 			set = 0;
 
-		for (s = 0; s < em357_info->ppage_size; s++)
-			bank->sectors[(i * em357_info->ppage_size) + s].is_protected = set;
+		for (s = 0; s < em351_info->ppage_size; s++)
+			bank->sectors[(i * em351_info->ppage_size) + s].is_protected = set;
 	}
 
 	return ERROR_OK;
 }
 
-static int em357_erase(struct flash_bank *bank, int first, int last)
+static int em351_erase(struct flash_bank *bank, int first, int last)
 {
 	struct target *target = bank->target;
 	int i;
@@ -356,73 +356,73 @@ static int em357_erase(struct flash_bank *bank, int first, int last)
 	}
 
 	if ((first == 0) && (last == (bank->num_sectors - 1)))
-		return em357_mass_erase(bank);
+		return em351_mass_erase(bank);
 
 	/* unlock flash registers */
-	int retval = target_write_u32(target, EM357_FLASH_KEYR, KEY1);
+	int retval = target_write_u32(target, EM351_FLASH_KEYR, KEY1);
 	if (retval != ERROR_OK)
 		return retval;
-	retval = target_write_u32(target, EM357_FLASH_KEYR, KEY2);
+	retval = target_write_u32(target, EM351_FLASH_KEYR, KEY2);
 	if (retval != ERROR_OK)
 		return retval;
 
 	for (i = first; i <= last; i++) {
-		retval = target_write_u32(target, EM357_FLASH_CR, FLASH_PER);
+		retval = target_write_u32(target, EM351_FLASH_CR, FLASH_PER);
 		if (retval != ERROR_OK)
 			return retval;
-		retval = target_write_u32(target, EM357_FLASH_AR,
+		retval = target_write_u32(target, EM351_FLASH_AR,
 				bank->base + bank->sectors[i].offset);
 		if (retval != ERROR_OK)
 			return retval;
-		retval = target_write_u32(target, EM357_FLASH_CR, FLASH_PER | FLASH_STRT);
+		retval = target_write_u32(target, EM351_FLASH_CR, FLASH_PER | FLASH_STRT);
 		if (retval != ERROR_OK)
 			return retval;
 
-		retval = em357_wait_status_busy(bank, 100);
+		retval = em351_wait_status_busy(bank, 100);
 		if (retval != ERROR_OK)
 			return retval;
 
 		bank->sectors[i].is_erased = 1;
 	}
 
-	retval = target_write_u32(target, EM357_FLASH_CR, FLASH_LOCK);
+	retval = target_write_u32(target, EM351_FLASH_CR, FLASH_LOCK);
 	if (retval != ERROR_OK)
 		return retval;
 
 	return ERROR_OK;
 }
 
-static int em357_protect(struct flash_bank *bank, int set, int first, int last)
+static int em351_protect(struct flash_bank *bank, int set, int first, int last)
 {
-	struct em357_flash_bank *em357_info = NULL;
+	struct em351_flash_bank *em351_info = NULL;
 	struct target *target = bank->target;
 	uint16_t prot_reg[4] = {0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF};
 	int i, reg, bit;
 	int status;
 	uint32_t protection;
 
-	em357_info = bank->driver_priv;
+	em351_info = bank->driver_priv;
 
 	if (target->state != TARGET_HALTED) {
 		LOG_ERROR("Target not halted");
 		return ERROR_TARGET_NOT_HALTED;
 	}
 
-	if ((first % em357_info->ppage_size) != 0) {
+	if ((first % em351_info->ppage_size) != 0) {
 		LOG_WARNING("aligned start protect sector to a %d sector boundary",
-			em357_info->ppage_size);
-		first = first - (first % em357_info->ppage_size);
+			em351_info->ppage_size);
+		first = first - (first % em351_info->ppage_size);
 	}
-	if (((last + 1) % em357_info->ppage_size) != 0) {
+	if (((last + 1) % em351_info->ppage_size) != 0) {
 		LOG_WARNING("aligned end protect sector to a %d sector boundary",
-			em357_info->ppage_size);
+			em351_info->ppage_size);
 		last++;
-		last = last - (last % em357_info->ppage_size);
+		last = last - (last % em351_info->ppage_size);
 		last--;
 	}
 
 	/* each bit refers to a 4bank protection */
-	int retval = target_read_u32(target, EM357_FLASH_WRPR, &protection);
+	int retval = target_read_u32(target, EM351_FLASH_WRPR, &protection);
 	if (retval != ERROR_OK)
 		return retval;
 
@@ -431,8 +431,8 @@ static int em357_protect(struct flash_bank *bank, int set, int first, int last)
 	prot_reg[2] = (uint16_t)(protection >> 16);
 
 	for (i = first; i <= last; i++) {
-		reg = (i / em357_info->ppage_size) / 8;
-		bit = (i / em357_info->ppage_size) - (reg * 8);
+		reg = (i / em351_info->ppage_size) / 8;
+		bit = (i / em351_info->ppage_size) - (reg * 8);
 
 		LOG_WARNING("reg, bit: %d, %d", reg, bit);
 		if (set)
@@ -441,18 +441,18 @@ static int em357_protect(struct flash_bank *bank, int set, int first, int last)
 			prot_reg[reg] |= (1 << bit);
 	}
 
-	status = em357_erase_options(bank);
+	status = em351_erase_options(bank);
 	if (retval != ERROR_OK)
 		return status;
 
-	em357_info->option_bytes.protection[0] = prot_reg[0];
-	em357_info->option_bytes.protection[1] = prot_reg[1];
-	em357_info->option_bytes.protection[2] = prot_reg[2];
+	em351_info->option_bytes.protection[0] = prot_reg[0];
+	em351_info->option_bytes.protection[1] = prot_reg[1];
+	em351_info->option_bytes.protection[2] = prot_reg[2];
 
-	return em357_write_options(bank);
+	return em351_write_options(bank);
 }
 
-static int em357_write_block(struct flash_bank *bank, uint8_t *buffer,
+static int em351_write_block(struct flash_bank *bank, uint8_t *buffer,
 	uint32_t offset, uint32_t count)
 {
 	struct target *target = bank->target;
@@ -467,21 +467,21 @@ static int em357_write_block(struct flash_bank *bank, uint8_t *buffer,
 	/* see contib/loaders/flash/stm32x.s for src, the same is used here except for
 	 * a modified *_FLASH_BASE */
 
-	static const uint8_t em357_flash_write_code[] = {
-		/* #define EM357_FLASH_CR_OFFSET	0x10
-		 * #define EM357_FLASH_SR_OFFSET	0x0C
+	static const uint8_t em351_flash_write_code[] = {
+		/* #define EM351_FLASH_CR_OFFSET	0x10
+		 * #define EM351_FLASH_SR_OFFSET	0x0C
 		 * write: */
-		0x08, 0x4c,					/* ldr	r4, EM357_FLASH_BASE */
+		0x08, 0x4c,					/* ldr	r4, EM351_FLASH_BASE */
 		0x1c, 0x44,					/* add	r4, r3 */
 		/* write_half_word: */
 		0x01, 0x23,					/* movs	r3, #0x01 */
 		0x23, 0x61,					/* str	r3, [r4,
-								 *#EM357_FLASH_CR_OFFSET] */
+								 *#EM351_FLASH_CR_OFFSET] */
 		0x30, 0xf8, 0x02, 0x3b,		/* ldrh	r3, [r0], #0x02 */
 		0x21, 0xf8, 0x02, 0x3b,		/* strh	r3, [r1], #0x02 */
 		/* busy: */
 		0xe3, 0x68,					/* ldr	r3, [r4,
-								 *#EM357_FLASH_SR_OFFSET] */
+								 *#EM351_FLASH_SR_OFFSET] */
 		0x13, 0xf0, 0x01, 0x0f,		/* tst	r3, #0x01 */
 		0xfb, 0xd0,					/* beq	busy */
 		0x13, 0xf0, 0x14, 0x0f,		/* tst	r3, #0x14 */
@@ -490,11 +490,11 @@ static int em357_write_block(struct flash_bank *bank, uint8_t *buffer,
 		0xf0, 0xd1,					/* bne	write_half_word */
 		/* exit: */
 		0x00, 0xbe,					/* bkpt	#0x00 */
-		0x00, 0x80, 0x00, 0x40,		/* EM357_FLASH_BASE: .word 0x40008000 */
+		0x00, 0x80, 0x00, 0x40,		/* EM351_FLASH_BASE: .word 0x40008000 */
 	};
 
 	/* flash write code */
-	if (target_alloc_working_area(target, sizeof(em357_flash_write_code),
+	if (target_alloc_working_area(target, sizeof(em351_flash_write_code),
 			&write_algorithm) != ERROR_OK) {
 		LOG_WARNING("no working area available, can't do block memory writes");
 		return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
@@ -502,7 +502,7 @@ static int em357_write_block(struct flash_bank *bank, uint8_t *buffer,
 	;
 
 	retval = target_write_buffer(target, write_algorithm->address,
-			sizeof(em357_flash_write_code), (uint8_t *)em357_flash_write_code);
+			sizeof(em351_flash_write_code), (uint8_t *)em351_flash_write_code);
 	if (retval != ERROR_OK)
 		return retval;
 
@@ -545,14 +545,14 @@ static int em357_write_block(struct flash_bank *bank, uint8_t *buffer,
 		retval = target_run_algorithm(target, 0, NULL, 4, reg_params,
 				write_algorithm->address, 0, 10000, &armv7m_info);
 		if (retval != ERROR_OK) {
-			LOG_ERROR("error executing em357 flash write algorithm");
+			LOG_ERROR("error executing em351 flash write algorithm");
 			break;
 		}
 
 		if (buf_get_u32(reg_params[3].value, 0, 32) & FLASH_PGERR) {
 			LOG_ERROR("flash memory not erased before writing");
 			/* Clear but report errors */
-			target_write_u32(target, EM357_FLASH_SR, FLASH_PGERR);
+			target_write_u32(target, EM351_FLASH_SR, FLASH_PGERR);
 			retval = ERROR_FAIL;
 			break;
 		}
@@ -560,7 +560,7 @@ static int em357_write_block(struct flash_bank *bank, uint8_t *buffer,
 		if (buf_get_u32(reg_params[3].value, 0, 32) & FLASH_WRPRTERR) {
 			LOG_ERROR("flash memory write protected");
 			/* Clear but report errors */
-			target_write_u32(target, EM357_FLASH_SR, FLASH_WRPRTERR);
+			target_write_u32(target, EM351_FLASH_SR, FLASH_WRPRTERR);
 			retval = ERROR_FAIL;
 			break;
 		}
@@ -581,7 +581,7 @@ static int em357_write_block(struct flash_bank *bank, uint8_t *buffer,
 	return retval;
 }
 
-static int em357_write(struct flash_bank *bank, uint8_t *buffer,
+static int em351_write(struct flash_bank *bank, uint8_t *buffer,
 	uint32_t offset, uint32_t count)
 {
 	struct target *target = bank->target;
@@ -602,17 +602,17 @@ static int em357_write(struct flash_bank *bank, uint8_t *buffer,
 	}
 
 	/* unlock flash registers */
-	retval = target_write_u32(target, EM357_FLASH_KEYR, KEY1);
+	retval = target_write_u32(target, EM351_FLASH_KEYR, KEY1);
 	if (retval != ERROR_OK)
 		return retval;
-	retval = target_write_u32(target, EM357_FLASH_KEYR, KEY2);
+	retval = target_write_u32(target, EM351_FLASH_KEYR, KEY2);
 	if (retval != ERROR_OK)
 		return retval;
 
 	/* multiple half words (2-byte) to be programmed? */
 	if (words_remaining > 0) {
 		/* try using a block write */
-		retval = em357_write_block(bank, buffer, offset, words_remaining);
+		retval = em351_write_block(bank, buffer, offset, words_remaining);
 		if (retval != ERROR_OK) {
 			if (retval == ERROR_TARGET_RESOURCE_NOT_AVAILABLE) {
 				/* if block write failed (no sufficient working area),
@@ -634,14 +634,14 @@ static int em357_write(struct flash_bank *bank, uint8_t *buffer,
 		uint16_t value;
 		memcpy(&value, buffer + bytes_written, sizeof(uint16_t));
 
-		retval = target_write_u32(target, EM357_FLASH_CR, FLASH_PG);
+		retval = target_write_u32(target, EM351_FLASH_CR, FLASH_PG);
 		if (retval != ERROR_OK)
 			return retval;
 		retval = target_write_u16(target, address, value);
 		if (retval != ERROR_OK)
 			return retval;
 
-		retval = em357_wait_status_busy(bank, 5);
+		retval = em351_wait_status_busy(bank, 5);
 		if (retval != ERROR_OK)
 			return retval;
 
@@ -654,43 +654,42 @@ static int em357_write(struct flash_bank *bank, uint8_t *buffer,
 		uint16_t value = 0xffff;
 		memcpy(&value, buffer + bytes_written, bytes_remaining);
 
-		retval = target_write_u32(target, EM357_FLASH_CR, FLASH_PG);
+		retval = target_write_u32(target, EM351_FLASH_CR, FLASH_PG);
 		if (retval != ERROR_OK)
 			return retval;
 		retval = target_write_u16(target, address, value);
 		if (retval != ERROR_OK)
 			return retval;
 
-		retval = em357_wait_status_busy(bank, 5);
+		retval = em351_wait_status_busy(bank, 5);
 		if (retval != ERROR_OK)
 			return retval;
 	}
 
-	return target_write_u32(target, EM357_FLASH_CR, FLASH_LOCK);
+	return target_write_u32(target, EM351_FLASH_CR, FLASH_LOCK);
 }
 
-static int em357_probe(struct flash_bank *bank)
+static int em351_probe(struct flash_bank *bank)
 {
 	struct target *target = bank->target;
-	struct em357_flash_bank *em357_info = bank->driver_priv;
+	struct em351_flash_bank *em351_info = bank->driver_priv;
 	int i;
 	uint16_t num_pages;
 	int page_size;
 	uint32_t base_address = 0x08000000;
 
-	em357_info->probed = 0;
+	em351_info->probed = 0;
 
 	/* Enable FPEC CLK */
-	int retval = target_write_u32(target, EM357_FPEC_CLK, 0x00000001);
+	int retval = target_write_u32(target, EM351_FPEC_CLK, 0x00000001);
 	if (retval != ERROR_OK)
 		return retval;
 
-	//for EM357, it's 96 2k pages with 4 pages per protection bit.
+	//for EM351, it's 96 2k pages with 4 pages per protection bit.
 	//for EM351/STM32W108CB, it's 64 2k pages with 4 pages per prot. bit.
-	//for EM351/STM32W108C8, it's 64 1k pages with 4 pages per prot. bit.
 
-	page_size = 1024;
-	em357_info->ppage_size = 4;
+	page_size = 2048;
+	em351_info->ppage_size = 4;
 	num_pages = 64;
 
 	LOG_INFO("flash size = %dkbytes", num_pages*page_size/1024);
@@ -712,30 +711,30 @@ static int em357_probe(struct flash_bank *bank)
 		bank->sectors[i].is_protected = 1;
 	}
 
-	em357_info->probed = 1;
+	em351_info->probed = 1;
 
 	return ERROR_OK;
 }
 
-static int em357_auto_probe(struct flash_bank *bank)
+static int em351_auto_probe(struct flash_bank *bank)
 {
-	struct em357_flash_bank *em357_info = bank->driver_priv;
-	if (em357_info->probed)
+	struct em351_flash_bank *em351_info = bank->driver_priv;
+	if (em351_info->probed)
 		return ERROR_OK;
-	return em357_probe(bank);
+	return em351_probe(bank);
 }
 
 
-static int get_em357_info(struct flash_bank *bank, char *buf, int buf_size)
+static int get_em351_info(struct flash_bank *bank, char *buf, int buf_size)
 {
-	snprintf(buf, buf_size, "em357\n");
+	snprintf(buf, buf_size, "em351\n");
 	return ERROR_OK;
 }
 
-COMMAND_HANDLER(em357_handle_lock_command)
+COMMAND_HANDLER(em351_handle_lock_command)
 {
 	struct target *target = NULL;
-	struct em357_flash_bank *em357_info = NULL;
+	struct em351_flash_bank *em351_info = NULL;
 
 	if (CMD_ARGC < 1)
 		return ERROR_COMMAND_SYNTAX_ERROR;
@@ -745,7 +744,7 @@ COMMAND_HANDLER(em357_handle_lock_command)
 	if (ERROR_OK != retval)
 		return retval;
 
-	em357_info = bank->driver_priv;
+	em351_info = bank->driver_priv;
 
 	target = bank->target;
 
@@ -754,25 +753,25 @@ COMMAND_HANDLER(em357_handle_lock_command)
 		return ERROR_TARGET_NOT_HALTED;
 	}
 
-	if (em357_erase_options(bank) != ERROR_OK) {
-		command_print(CMD_CTX, "em357 failed to erase options");
+	if (em351_erase_options(bank) != ERROR_OK) {
+		command_print(CMD_CTX, "em351 failed to erase options");
 		return ERROR_OK;
 	}
 
 	/* set readout protection */
-	em357_info->option_bytes.RDP = 0;
+	em351_info->option_bytes.RDP = 0;
 
-	if (em357_write_options(bank) != ERROR_OK) {
-		command_print(CMD_CTX, "em357 failed to lock device");
+	if (em351_write_options(bank) != ERROR_OK) {
+		command_print(CMD_CTX, "em351 failed to lock device");
 		return ERROR_OK;
 	}
 
-	command_print(CMD_CTX, "em357 locked");
+	command_print(CMD_CTX, "em351 locked");
 
 	return ERROR_OK;
 }
 
-COMMAND_HANDLER(em357_handle_unlock_command)
+COMMAND_HANDLER(em351_handle_unlock_command)
 {
 	struct target *target = NULL;
 
@@ -791,24 +790,24 @@ COMMAND_HANDLER(em357_handle_unlock_command)
 		return ERROR_TARGET_NOT_HALTED;
 	}
 
-	if (em357_erase_options(bank) != ERROR_OK) {
-		command_print(CMD_CTX, "em357 failed to unlock device");
+	if (em351_erase_options(bank) != ERROR_OK) {
+		command_print(CMD_CTX, "em351 failed to unlock device");
 		return ERROR_OK;
 	}
 
-	if (em357_write_options(bank) != ERROR_OK) {
-		command_print(CMD_CTX, "em357 failed to lock device");
+	if (em351_write_options(bank) != ERROR_OK) {
+		command_print(CMD_CTX, "em351 failed to lock device");
 		return ERROR_OK;
 	}
 
-	command_print(CMD_CTX, "em357 unlocked.\n"
+	command_print(CMD_CTX, "em351 unlocked.\n"
 		"INFO: a reset or power cycle is required "
 		"for the new settings to take effect.");
 
 	return ERROR_OK;
 }
 
-static int em357_mass_erase(struct flash_bank *bank)
+static int em351_mass_erase(struct flash_bank *bank)
 {
 	struct target *target = bank->target;
 
@@ -818,33 +817,33 @@ static int em357_mass_erase(struct flash_bank *bank)
 	}
 
 	/* unlock option flash registers */
-	int retval = target_write_u32(target, EM357_FLASH_KEYR, KEY1);
+	int retval = target_write_u32(target, EM351_FLASH_KEYR, KEY1);
 	if (retval != ERROR_OK)
 		return retval;
-	retval = target_write_u32(target, EM357_FLASH_KEYR, KEY2);
+	retval = target_write_u32(target, EM351_FLASH_KEYR, KEY2);
 	if (retval != ERROR_OK)
 		return retval;
 
 	/* mass erase flash memory */
-	retval = target_write_u32(target, EM357_FLASH_CR, FLASH_MER);
+	retval = target_write_u32(target, EM351_FLASH_CR, FLASH_MER);
 	if (retval != ERROR_OK)
 		return retval;
-	retval = target_write_u32(target, EM357_FLASH_CR, FLASH_MER | FLASH_STRT);
-	if (retval != ERROR_OK)
-		return retval;
-
-	retval = em357_wait_status_busy(bank, 100);
+	retval = target_write_u32(target, EM351_FLASH_CR, FLASH_MER | FLASH_STRT);
 	if (retval != ERROR_OK)
 		return retval;
 
-	retval = target_write_u32(target, EM357_FLASH_CR, FLASH_LOCK);
+	retval = em351_wait_status_busy(bank, 100);
+	if (retval != ERROR_OK)
+		return retval;
+
+	retval = target_write_u32(target, EM351_FLASH_CR, FLASH_LOCK);
 	if (retval != ERROR_OK)
 		return retval;
 
 	return ERROR_OK;
 }
 
-COMMAND_HANDLER(em357_handle_mass_erase_command)
+COMMAND_HANDLER(em351_handle_mass_erase_command)
 {
 	int i;
 
@@ -856,66 +855,66 @@ COMMAND_HANDLER(em357_handle_mass_erase_command)
 	if (ERROR_OK != retval)
 		return retval;
 
-	retval = em357_mass_erase(bank);
+	retval = em351_mass_erase(bank);
 	if (retval == ERROR_OK) {
 		/* set all sectors as erased */
 		for (i = 0; i < bank->num_sectors; i++)
 			bank->sectors[i].is_erased = 1;
 
-		command_print(CMD_CTX, "em357 mass erase complete");
+		command_print(CMD_CTX, "em351 mass erase complete");
 	} else
-		command_print(CMD_CTX, "em357 mass erase failed");
+		command_print(CMD_CTX, "em351 mass erase failed");
 
 	return retval;
 }
 
-static const struct command_registration em357_exec_command_handlers[] = {
+static const struct command_registration em351_exec_command_handlers[] = {
 	{
 		.name = "lock",
 		.usage = "<bank>",
-		.handler = em357_handle_lock_command,
+		.handler = em351_handle_lock_command,
 		.mode = COMMAND_EXEC,
 		.help = "Lock entire flash device.",
 	},
 	{
 		.name = "unlock",
 		.usage = "<bank>",
-		.handler = em357_handle_unlock_command,
+		.handler = em351_handle_unlock_command,
 		.mode = COMMAND_EXEC,
 		.help = "Unlock entire protected flash device.",
 	},
 	{
 		.name = "mass_erase",
 		.usage = "<bank>",
-		.handler = em357_handle_mass_erase_command,
+		.handler = em351_handle_mass_erase_command,
 		.mode = COMMAND_EXEC,
 		.help = "Erase entire flash device.",
 	},
 	COMMAND_REGISTRATION_DONE
 };
 
-static const struct command_registration em357_command_handlers[] = {
+static const struct command_registration em351_command_handlers[] = {
 	{
-		.name = "em357",
+		.name = "em351",
 		.mode = COMMAND_ANY,
-		.help = "em357 flash command group",
+		.help = "em351 flash command group",
 		.usage = "",
-		.chain = em357_exec_command_handlers,
+		.chain = em351_exec_command_handlers,
 	},
 	COMMAND_REGISTRATION_DONE
 };
 
-struct flash_driver em357_flash = {
-	.name = "em357",
-	.commands = em357_command_handlers,
-	.flash_bank_command = em357_flash_bank_command,
-	.erase = em357_erase,
-	.protect = em357_protect,
-	.write = em357_write,
+struct flash_driver em351_flash = {
+	.name = "em351",
+	.commands = em351_command_handlers,
+	.flash_bank_command = em351_flash_bank_command,
+	.erase = em351_erase,
+	.protect = em351_protect,
+	.write = em351_write,
 	.read = default_flash_read,
-	.probe = em357_probe,
-	.auto_probe = em357_auto_probe,
+	.probe = em351_probe,
+	.auto_probe = em351_auto_probe,
 	.erase_check = default_flash_blank_check,
-	.protect_check = em357_protect_check,
-	.info = get_em357_info,
+	.protect_check = em351_protect_check,
+	.info = get_em351_info,
 };

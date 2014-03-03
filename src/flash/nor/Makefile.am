@@ -15,6 +15,7 @@ NOR_DRIVERS = \
 	avrf.c \
 	cfi.c \
 	em357.c \
+	em351.c \
 	faux.c \
 	lpc2000.c \
 	lpc288x.c \

@@ -829,6 +829,8 @@ static int stm32x_get_device_id(struct flash_bank *bank, uint32_t *device_id)
 	if (retval != ERROR_OK)
 		return retval;
 
+	LOG_INFO("CPUID returned 0x%8x", cpuid);
+
 	if (((cpuid >> 4) & 0xFFF) == 0xC20) {
 		/* 0xC20 is M0 devices */
 		device_id_register = 0x40015800;
@@ -839,7 +841,7 @@ static int stm32x_get_device_id(struct flash_bank *bank, uint32_t *device_id)
 		/* 0xC24 is M4 devices */
 		device_id_register = 0xE0042000;
 	} else {
-		LOG_ERROR("Cannot identify target as a stm32x");
+		LOG_ERROR("Cannot identify target as a stm32x (CPUID 0x%x)", cpuid);
 		return ERROR_FAIL;
 	}
 
